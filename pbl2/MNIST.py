@@ -52,44 +52,30 @@ def read_idx(filename):
 def MNIST_Classify_test():
     # data = load_data("training", "./dataset/")
     # train_dataset = np.array(data)
-    # trT = train_dataset.T
-
-    # print(train_dataset.shape)
 
     #load data
     raw_train = read_idx("./dataset/train-images.idx3-ubyte")
     train_data = np.reshape(raw_train, (60000, 28*28))
     train_label = read_idx("./dataset/train-labels.idx1-ubyte")
 
-    raw_test = read_idx("./dataset/new1k-images.idx3-ubyte")
-    test_data = np.reshape(raw_test, (10000, 28*28))
-    test_label = read_idx("./dataset/new1k-labels.idx1-ubyte")
-
-    # X_train, y_train = np.stack(trT[1]).reshape(len(train_dataset), 784), trT[0]
-
-    # print(X_train.shape, y_train.shape)
-
-    # X_train = np.array([[-1, -1], [-2, -1], [1, 1], [2, 1]])
-    # y_train = np.array([0, 0, 1, 1])
+    raw_new = read_idx("./dataset/new1k-images.idx3-ubyte")
+    new_data = np.reshape(raw_test, (10000, 28*28))
+    new_label = read_idx("./dataset/new1k-labels.idx1-ubyte")
 
     X_train = train_data
     y_train = train_label
     
-    svm = SGDSVM(C=1.0, eta=0.01, max_iter=3, tol=1e-3, epoch_size=1, batch_size=15)
+    svm = SGDSVM(C=0.1, eta=0.001, max_iter=50, tol=1e-3, epoch_size=10, batch_size=100)
     svm.fit(X_train, y_train)
     y_pred = svm.predict(X_train)
 
-    # clf = SVC()
-    # clf.fit(X_train, y_train)
-    # y_hat = clf.predict(X_train)
-    # print("y_hat.shape : ", y_hat.shape)
-
     print(y_pred, y_train)
-    # accuracy = accuracy_score(y_train, y_pred)
-    # print("Accuracy : ", accuracy)
+    accuracy = accuracy_score(y_train, y_pred)
+    print("Accuracy : ", accuracy)
 
-# def main(training_image=None, training_label=None, test_image):
-#     # TODO
+def main(training_image=None, training_label=None, test_image):
+    # TODO
+    pass
 
 if __name__ == '__main__':
 #     main(training_image=sys.argv[1], training_label=sys.argv[2], test_image=sts.argv[3])
