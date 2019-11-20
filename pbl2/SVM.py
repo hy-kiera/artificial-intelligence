@@ -14,7 +14,7 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
     global INF
     INF = int(2e30)
 
-    def __init__(self, C=1.0, eta=0.01, max_iter=-1, tol=1e-3, epoch_size=1, batch_size=1):
+    def __init__(self, C=1.0, eta=0.01, max_iter=-1, tol=1e-3, epoch_size=1, batch_size=1, random_state=1234):
         """
         Called when initializing the classifier
         Parmeters :
@@ -58,9 +58,9 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
             if np.dot(yr.T, z) <= 1:
                 if mode == 'W':
                     v = np.dot(Xr, -yr.T)
-                    np.add(dW, v)
+                    dW = np.add(dW, v)
                 if mode == 'b':
-                    np.add(db, -yr.T)
+                    db = np.add(db, -yr.T)
 
         if mode == 'W':
             dW /= self.batch_size
@@ -81,10 +81,13 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
         assert (type(self.batch_size) == int and self.batch_size >= 1 and self.batch_size <= len(X)), "batch_size parameter must be positive integer"
 
         self.n_features = np.array(X).shape[1]
-        self.n_class = len(set(y))
+        self.n_class = len(np.unique(y))
+        print("n_features : ", self.n_features, "n_class : ", self.n_class)
 
         # init parameter
-        self.W = np.random.rand(self.n_features, self.n_class) # (784, 10)
+        # self.W = np.random.rand(self.n_features, self.n_class) # (784, 10)
+        self.rgen = np.random.RandomState(self.random_state)
+        self.W = self.rgen.normal(loc=0.0, scale=0.01, size=(self.n_features, self.n_class))
         self.b = np.ones((1, self.n_class)) # (1, 10)
 
         if self.max_iter == -1:
@@ -95,7 +98,7 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
         # SGD Algorithm with Weight Averaging
         for epoch in range(self.epoch_size):
             for it in range(1, mi+1):
-                n_batchs = int(np.ceil(len(y) / self.batch_size)
+                n_batchs = int(np.ceil(len(y) / self.batch_size))
 
                 # random sampling without replacement
                 s = np.arange(n_batchs)
@@ -111,14 +114,16 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
                     BX =  np.reshape(BX, (self.batch_size, self.n_features))
                     By =  np.reshape(By, (self.batch_size, self.n_class))
 
+                    Wk = self.W
+
                     # update - SAG(stochastic average gradient)
-                    update_W = self.W + self.eta * self._SGD(BX, By, k, 'W') # (784, 10)
-                    update_b = self.b + self.eta * self._SGD(BX, By, k, 'b') # (1, 10)
-                    self.W = (it/it+1) * self.W + (it/it+1) * update_W
-                    self.b = (it/it+1) * self.b + (it/it+1) * update_b
+                    update_W = np.add(self.W, np.multiply(self.eta, self._SGD(BX, By, k, 'W'))) # (784, 10)
+                    update_b = np.add(self.b, np.multiply(self.eta, self._SGD(BX, By, k, 'b'))) # (1, 10)
+                    self.W = np.add(np.multiply((it/(it+1)), self.W), np.multiply((it/(it+1)), update_W))
+                    self.b = np.add(np.multiply((it/(it+1)), self.b), np.multiply((it/(it+1)), update_b))
 
                     # compare with tol in order to stop training
-                    if np.all(np.abs(self.W - self.W) <= self.tol):
+                    if np.all(np.abs(np.subtract(self.W, Wk)) <= self.tol):
                         break
 
         # return self

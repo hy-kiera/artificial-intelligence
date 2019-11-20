@@ -35,12 +35,6 @@ import matplotlib.pyplot as plt
 #         self.fit(X)
 #         self.transform(X)
 
-# def accuracy_score(y_true, y_pred):
-#     differing_labels = np.count_nonzero(y_true - y_pred, axis=1)
-#     score = differing_labels == 0
-
-#     return score
-
 def DrawCMat(y, pred_y, labels=range(10)):
     cmat = confusion_matrix(y, pred_y,labels)
     sns.set_palette("husl")
@@ -72,11 +66,19 @@ def deskew(image):
 # deskewed = [deskew(img) for img in trT[1]]
 # deskewedTr = np.array(deskewed)
 
-def preprocess(data):
+def preprocess(X_train, X_test):
     """
     Preprocessing
         1. Increase data with deskew
         2. Scaling
     """
     # duplicate dataset and deskew it
-    dup_data = data[:,:]
+    # dup_data = data[:,:]
+    # deskewed_data = deskew()
+
+    scl = StandardScaler()
+    scl.fit(X_train)
+    X_train = scl.transform(X_train)
+    X_test = scl.transform(X_test)
+
+    return X_train, X_test

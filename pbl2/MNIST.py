@@ -55,27 +55,39 @@ def MNIST_Classify_test():
 
     #load data
     raw_train = read_idx("./dataset/train-images.idx3-ubyte")
-    train_data = np.reshape(raw_train, (60000, 28*28))
+    train_data = np.reshape(raw_train, (60000, 784))
     train_label = read_idx("./dataset/train-labels.idx1-ubyte")
 
     raw_new = read_idx("./dataset/new1k-images.idx3-ubyte")
-    new_data = np.reshape(raw_test, (10000, 28*28))
+    new_data = np.reshape(raw_new, (10000, 784))
     new_label = read_idx("./dataset/new1k-labels.idx1-ubyte")
 
-    X_train = train_data
-    y_train = train_label
-    
-    svm = SGDSVM(C=0.1, eta=0.001, max_iter=50, tol=1e-3, epoch_size=10, batch_size=100)
-    svm.fit(X_train, y_train)
-    y_pred = svm.predict(X_train)
+    raw_test = read_idx("./dataset/test-images.idx3-ubyte")
+    test_data = np.reshape(raw_test, (10000, 784))
+    test_label = read_idx("./dataset/test-labels.idx1-ubyte")
 
-    print(y_pred, y_train)
-    accuracy = accuracy_score(y_train, y_pred)
+    print(train_data.shape, train_label.shape, new_data.shape, new_label.shape)
+    X_train = np.vstack((train_data, new_data))
+    y_train = np.concatenate((np.array(train_label), np.array(new_label)))
+    print("new X_train shape : ", X_train.shape, "new y_train shape : ", y_train.shape)
+    X_test = np.array(test_data)
+    y_test = np.array(test_label)
+    print("X_test shape : ", X_test.shape, "y_test shape : ", y_test.shape)
+
+    X_train, X_test = preprocess(X_train, X_test)
+    
+    svm = SGDSVM(C=1.0, eta=0.001, max_iter=1, tol=1e-3, epoch_size=10, batch_size=200, random_state=1234)
+    svm.fit(X_train, y_train)
+    y_pred = svm.predict(X_test)
+
+    DrawCMat(y_test, y_pred)
+
+    print(y_pred, y_test)
+    accuracy = accuracy_score(y_test, y_pred)
     print("Accuracy : ", accuracy)
 
-def main(training_image=None, training_label=None, test_image):
+# def main(training_image=None, training_label=None, test_image):
     # TODO
-    pass
 
 if __name__ == '__main__':
 #     main(training_image=sys.argv[1], training_label=sys.argv[2], test_image=sts.argv[3])
