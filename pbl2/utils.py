@@ -40,6 +40,8 @@ def DrawCMat(y, pred_y, labels=range(10)):
     sns.set_palette("husl")
     plt.figure(figsize=(12,6))
     sns.heatmap(cmat, annot=True)
+    plt.title("confusion matrix")
+    plt.show()
 
 """ Deskew """
 def moments(image):

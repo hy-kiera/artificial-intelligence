@@ -40,7 +40,7 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
             
         return onehot
 
-    def _SGD(self, X, y, k, mode):
+    def _SGD(self, X, y, k, W, b, mode):
         """
         SGD(Stochastic Gradient Descent) by mini batch
         """
@@ -53,7 +53,7 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
             yr = y[r].reshape(self.n_class, 1)
 
             # using chain rule
-            z = np.add(np.dot(self.W.T, Xr), self.b.T) # (10, 784) * (784,) + (10, 1)
+            z = np.add(np.dot(W.T, Xr), b.T) # (10, 784) * (784,) + (10, 1)
 
             if np.dot(yr.T, z) <= 1:
                 if mode == 'W':
@@ -82,7 +82,7 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
 
         self.n_features = np.array(X).shape[1]
         self.n_class = len(np.unique(y))
-        print("n_features : ", self.n_features, "n_class : ", self.n_class)
+        # print("n_features : ", self.n_features, "n_class : ", self.n_class)
 
         # init parameter
         # self.W = np.random.rand(self.n_features, self.n_class) # (784, 10)
@@ -102,28 +102,31 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
 
                 # random sampling without replacement
                 s = np.arange(n_batchs)
-                np.random.shuffle(s)
+                self.rgen.shuffle(s)
+
+                update_W = self.W
+                update_b = self.b
 
                 for k in s:
                     # mini batch
                     ks = self.batch_size * k
                     ke = self.batch_size * (k + 1)
 
+                    # TODO - batch size 배수가 아닐 때 처리
                     BX =  X[ks : ke]
                     By =  self.one_hot(y)[ks : ke]
+                    
                     BX =  np.reshape(BX, (self.batch_size, self.n_features))
                     By =  np.reshape(By, (self.batch_size, self.n_class))
 
-                    Wk = self.W
-
                     # update - SAG(stochastic average gradient)
-                    update_W = np.add(self.W, np.multiply(self.eta, self._SGD(BX, By, k, 'W'))) # (784, 10)
-                    update_b = np.add(self.b, np.multiply(self.eta, self._SGD(BX, By, k, 'b'))) # (1, 10)
+                    update_W = np.subtract(update_W, np.multiply(self.eta, self._SGD(BX, By, k, update_W, update_b, 'W'))) # (784, 10)
+                    update_b = np.subtract(update_b, np.multiply(self.eta, self._SGD(BX, By, k, update_W, update_b, 'b'))) # (1, 10)
                     self.W = np.add(np.multiply((it/(it+1)), self.W), np.multiply((it/(it+1)), update_W))
                     self.b = np.add(np.multiply((it/(it+1)), self.b), np.multiply((it/(it+1)), update_b))
 
                     # compare with tol in order to stop training
-                    if np.all(np.abs(np.subtract(self.W, Wk)) <= self.tol):
+                    if np.all(np.abs(np.subtract(self.W, update_W)) <= self.tol):
                         break
 
         # return self

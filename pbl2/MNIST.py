@@ -6,6 +6,7 @@ from SVM import SGDSVM
 from utils import *
 from sklearn.metrics import accuracy_score
 from sklearn.svm import SVC
+from sklearn.model_selection import GridSearchCV
 
 def load_data(dataset="training", path="."):
     """
@@ -66,21 +67,39 @@ def MNIST_Classify_test():
     test_data = np.reshape(raw_test, (10000, 784))
     test_label = read_idx("./dataset/test-labels.idx1-ubyte")
 
-    print(train_data.shape, train_label.shape, new_data.shape, new_label.shape)
+    # print(train_data.shape, train_label.shape, new_data.shape, new_label.shape)
     X_train = np.vstack((train_data, new_data))
     y_train = np.concatenate((np.array(train_label), np.array(new_label)))
-    print("new X_train shape : ", X_train.shape, "new y_train shape : ", y_train.shape)
+    # print("new X_train shape : ", X_train.shape, "new y_train shape : ", y_train.shape)
     X_test = np.array(test_data)
     y_test = np.array(test_label)
-    print("X_test shape : ", X_test.shape, "y_test shape : ", y_test.shape)
+    # print("X_test shape : ", X_test.shape, "y_test shape : ", y_test.shape)
 
     X_train, X_test = preprocess(X_train, X_test)
     
-    svm = SGDSVM(C=1.0, eta=0.001, max_iter=1, tol=1e-3, epoch_size=10, batch_size=200, random_state=1234)
+    svm = SGDSVM(C=1.0, eta=0.001, max_iter=5, tol=1e-3, epoch_size=1, batch_size=200, random_state=1234)
     svm.fit(X_train, y_train)
     y_pred = svm.predict(X_test)
 
-    DrawCMat(y_test, y_pred)
+    # TODO : GridSearchCV
+    # C=[0.01,0.1,10,100]
+    # tol=[0.01,0.1,10,100]
+    # eta=[0.0002,0.002,0.02]
+    # max_iter=[100,1000]
+    # param_grid = [
+    #     {'C' : C,
+    #     'tol' : tol,
+    #     'eta' : eta,
+    #     'max_iter' : max_iter
+    #     }
+    # ]
+    # svm = SGDSVM(epoch_size=10, batch_size=200, random_state=1234)
+    # param_grid = [{'C':[1.0], 'tol':[1e-3], 'eta':[0.001], 'max_iter':[1]}]
+    # gs = GridSearchCV(svm, param_grid, cv = 2)
+    # gs = gs.fit(X_train, y_train)
+    # print(gs.best_score_)
+
+    # DrawCMat(y_test, y_pred)
 
     print(y_pred, y_test)
     accuracy = accuracy_score(y_test, y_pred)
