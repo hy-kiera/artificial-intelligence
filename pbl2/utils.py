@@ -68,7 +68,7 @@ def deskew(image):
 # deskewed = [deskew(img) for img in trT[1]]
 # deskewedTr = np.array(deskewed)
 
-def preprocess(X_train, X_test):
+def preprocess(X_train, X_valid, y_train, y_valid):
     """
     Preprocessing
         1. Increase data with deskew
@@ -81,6 +81,6 @@ def preprocess(X_train, X_test):
     scl = StandardScaler()
     scl.fit(X_train)
     X_train = scl.transform(X_train)
-    X_test = scl.transform(X_test)
+    X_test = scl.transform(X_valid)
 
-    return X_train, X_test
+    return X_train, X_valid

@@ -11,7 +11,6 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
     """A SGD-SVM classifier"""
 
     # infinity number for max_iter
-    global INF
     INF = int(2e30)
 
     def __init__(self, C=1.0, eta=0.01, max_iter=-1, tol=1e-3, epoch_size=1, batch_size=1, random_state=1234):
@@ -33,9 +32,9 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
             setattr(self, arg, val)
 
     def one_hot(self, y):
-        onehot = np.ones((np.shape(y)[0], self.n_class))
+        onehot = np.ones((np.shape(y)[0], self.n_classes))
         
-        for i in range(self.n_class):
+        for i in range(self.n_classes):
             onehot[:, i][y != i] = -1
             
         return onehot
@@ -45,12 +44,12 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
         SGD(Stochastic Gradient Descent) by mini batch
         """
         # init
-        dW = np.zeros((self.n_features, self.n_class)) # (784, 10)
-        db = np.zeros((1, self.n_class)) # (1, 10)
+        dW = np.zeros((self.n_features, self.n_classes)) # (784, 10)
+        db = np.zeros((1, self.n_classes)) # (1, 10)
 
         for r in range(self.batch_size):
             Xr = X[r,:].reshape(self.n_features, 1)
-            yr = y[r].reshape(self.n_class, 1)
+            yr = y[r].reshape(self.n_classes, 1)
 
             # using chain rule
             z = np.add(np.dot(W.T, Xr), b.T) # (10, 784) * (784,) + (10, 1)
@@ -61,6 +60,7 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
                     dW = np.add(dW, v)
                 if mode == 'b':
                     db = np.add(db, -yr.T)
+            dW = np.add(dW, np.dot((1 / self.C), W))
 
         if mode == 'W':
             dW /= self.batch_size
@@ -80,15 +80,15 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
         assert (type(self.epoch_size) == int and self.epoch_size >= 1), "epoch_size parameter must be positive integer"
         assert (type(self.batch_size) == int and self.batch_size >= 1 and self.batch_size <= len(X)), "batch_size parameter must be positive integer"
 
-        self.n_features = np.array(X).shape[1]
-        self.n_class = len(np.unique(y))
-        # print("n_features : ", self.n_features, "n_class : ", self.n_class)
+        n = np.array(X).shape[0] # number of data points
+        self.n_features = np.array(X).shape[1] # number of features
+        self.n_classes = len(np.unique(y)) # number of classes
 
         # init parameter
-        # self.W = np.random.rand(self.n_features, self.n_class) # (784, 10)
+        # self.W = np.random.rand(self.n_features, self.n_classes) # (784, 10)
         self.rgen = np.random.RandomState(self.random_state)
-        self.W = self.rgen.normal(loc=0.0, scale=0.01, size=(self.n_features, self.n_class))
-        self.b = np.ones((1, self.n_class)) # (1, 10)
+        self.W = self.rgen.normal(loc=0.0, scale=0.01, size=(self.n_features, self.n_classes))
+        self.b = np.ones((1, self.n_classes)) # (1, 10)
 
         if self.max_iter == -1:
             mi = INF
@@ -97,11 +97,12 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
 
         # SGD Algorithm with Weight Averaging
         for epoch in range(self.epoch_size):
+            # TODO - iter for와 batch for 순서 어떻게? 바꿔야 하지 않을까
             for it in range(1, mi+1):
-                n_batchs = int(np.ceil(len(y) / self.batch_size))
+                n_batches = int(np.ceil(len(y) / self.batch_size))
 
                 # random sampling without replacement
-                s = np.arange(n_batchs)
+                s = np.arange(n_batches) # {0, 1, ... , n_batches-1}
                 self.rgen.shuffle(s)
 
                 update_W = self.W
@@ -112,12 +113,16 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
                     ks = self.batch_size * k
                     ke = self.batch_size * (k + 1)
 
-                    # TODO - batch size 배수가 아닐 때 처리
-                    BX =  X[ks : ke]
-                    By =  self.one_hot(y)[ks : ke]
+                    if ke > n:
+                        # the batch size is not a multiple of n
+                        BX = np.vstack((X[ks:n], X[0:ke-n]))
+                        By = np.vstack((self.one_hot(y)[ks:n], self.one_hot(y)[0:ke-n]))
+                    else:
+                        BX =  X[ks:ke]
+                        By =  self.one_hot(y)[ks:ke]
                     
                     BX =  np.reshape(BX, (self.batch_size, self.n_features))
-                    By =  np.reshape(By, (self.batch_size, self.n_class))
+                    By =  np.reshape(By, (self.batch_size, self.n_classes))
 
                     # update - SAG(stochastic average gradient)
                     update_W = np.subtract(update_W, np.multiply(self.eta, self._SGD(BX, By, k, update_W, update_b, 'W'))) # (784, 10)
@@ -128,8 +133,6 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
                     # compare with tol in order to stop training
                     if np.all(np.abs(np.subtract(self.W, update_W)) <= self.tol):
                         break
-
-        # return self
 
     def predict(self, X):
         """
@@ -144,5 +147,3 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
             raise RuntimeError("You must train classifer before predicting data!")
 
         return y_pred
-
-    # def score(self, )

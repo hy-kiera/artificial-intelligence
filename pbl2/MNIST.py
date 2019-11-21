@@ -55,31 +55,32 @@ def MNIST_Classify_test():
     # train_dataset = np.array(data)
 
     #load data
-    raw_train = read_idx("./dataset/train-images.idx3-ubyte")
-    train_data = np.reshape(raw_train, (60000, 784))
-    train_label = read_idx("./dataset/train-labels.idx1-ubyte")
+    raw_D1 = read_idx("./dataset/train-images.idx3-ubyte")
+    D1_data = np.reshape(raw_D1, (60000, 784))
+    D1_label = read_idx("./dataset/train-labels.idx1-ubyte")
 
-    raw_new = read_idx("./dataset/new1k-images.idx3-ubyte")
+    raw_new = read_idx("./dataset/new10k-images.idx3-ubyte")
     new_data = np.reshape(raw_new, (10000, 784))
-    new_label = read_idx("./dataset/new1k-labels.idx1-ubyte")
+    new_label = read_idx("./dataset/new10k-labels.idx1-ubyte")
 
-    raw_test = read_idx("./dataset/test-images.idx3-ubyte")
-    test_data = np.reshape(raw_test, (10000, 784))
-    test_label = read_idx("./dataset/test-labels.idx1-ubyte")
+    raw_D2 = read_idx("./dataset/test-images.idx3-ubyte")
+    D2_data = np.reshape(raw_D2, (10000, 784))
+    D2_label = read_idx("./dataset/test-labels.idx1-ubyte")
 
-    # print(train_data.shape, train_label.shape, new_data.shape, new_label.shape)
-    X_train = np.vstack((train_data, new_data))
-    y_train = np.concatenate((np.array(train_label), np.array(new_label)))
-    # print("new X_train shape : ", X_train.shape, "new y_train shape : ", y_train.shape)
-    X_test = np.array(test_data)
-    y_test = np.array(test_label)
-    # print("X_test shape : ", X_test.shape, "y_test shape : ", y_test.shape)
+    # train data, valid data
+    X_train = np.vstack((D1_data, new_data))
+    y_train = np.concatenate((np.array(D1_label), np.array(new_label)))
+    X_valid = np.array(D2_data)
+    y_valid = np.array(D2_label)
 
-    X_train, X_test = preprocess(X_train, X_test)
+    X_train, X_valid = preprocess(X_train, X_valid, y_train, y_valid)
+    print("X_train.shape : {0}, X_valid.shape : {1}".format(X_train.shape, X_valid.shape))
+    print("y_train.shape : {0}, y_valid.shape : {1}".format(y_train.shape, y_valid.shape))
+    print()
     
-    svm = SGDSVM(C=1.0, eta=0.001, max_iter=5, tol=1e-3, epoch_size=1, batch_size=200, random_state=1234)
+    svm = SGDSVM(C=1.0, eta=0.001, max_iter=5, tol=1e-3, epoch_size=1, batch_size=256, random_state=1234)
     svm.fit(X_train, y_train)
-    y_pred = svm.predict(X_test)
+    y_pred = svm.predict(X_valid)
 
     # TODO : GridSearchCV
     # C=[0.01,0.1,10,100]
@@ -99,14 +100,14 @@ def MNIST_Classify_test():
     # gs = gs.fit(X_train, y_train)
     # print(gs.best_score_)
 
-    # DrawCMat(y_test, y_pred)
+    DrawCMat(y_valid, y_pred)
 
-    print(y_pred, y_test)
-    accuracy = accuracy_score(y_test, y_pred)
+    print(y_pred, y_valid)
+    accuracy = accuracy_score(y_valid, y_pred)
     print("Accuracy : ", accuracy)
 
 # def main(training_image=None, training_label=None, test_image):
-    # TODO
+    # TODO - only predict test image (need to save weight and bias value and load them)
 
 if __name__ == '__main__':
 #     main(training_image=sys.argv[1], training_label=sys.argv[2], test_image=sts.argv[3])
