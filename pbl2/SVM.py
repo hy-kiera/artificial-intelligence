@@ -3,7 +3,7 @@
  https://sites.google.com/view/ailab-hyu/courses/2018-2/2018-2-artificial-intelligence/ai-pbl-problem-2
 """
 from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import accuracy_score
 import inspect
 import numpy as np
 
@@ -13,14 +13,13 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
     # infinity number for max_iter
     INF = int(2e30)
 
-    def __init__(self, C=1.0, eta=0.01, max_iter=-1, tol=1e-3, epoch_size=1, batch_size=1, random_state=1234):
+    def __init__(self, C=1000.0, eta=0.1, max_iter=5, batch_size=128, random_state=1234):
         """
         Called when initializing the classifier
         Parmeters :
             - C : Penalty parameter C of the error term.
             - eta : Learning Rate.
             - max_iter : Hard limit on iterations within solver, or -1 for no limit.
-            - tol : Tolerance for stopping criterion.
             - epoch_size : Epoch size for training.
             - batch_size : Mini batch size for SGD(Stochastic Gradient Descent).
         """
@@ -32,14 +31,18 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
             setattr(self, arg, val)
 
     def one_hot(self, y):
-        onehot = np.ones((np.shape(y)[0], self.n_classes))
+        """
+        one-hot encode : 1 is hot, -1 is cold
+        """
+        onehot = np.ones(self.n_classes)
         
         for i in range(self.n_classes):
-            onehot[:, i][y != i] = -1
+            if y != i:
+                onehot[i] = -1
             
         return onehot
 
-    def _SGD(self, X, y, k, W, b, mode):
+    def _SGD(self, X, y, W, b, batch_idx):
         """
         SGD(Stochastic Gradient Descent) by mini batch
         """
@@ -47,28 +50,28 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
         dW = np.zeros((self.n_features, self.n_classes)) # (784, 10)
         db = np.zeros((1, self.n_classes)) # (1, 10)
 
-        for r in range(self.batch_size):
-            Xr = X[r,:].reshape(self.n_features, 1)
-            yr = y[r].reshape(self.n_classes, 1)
+        for idx in batch_idx:
+            Xr = X[idx,:].reshape(self.n_features, 1)
+            yr = (self.one_hot(y[idx])).reshape(self.n_classes, 1)
 
             # using chain rule
-            z = np.add(np.dot(W.T, Xr), b.T) # (10, 784) * (784,) + (10, 1)
+            z = np.add(np.dot(W.T, Xr), b.T) 
+           
+            conditions = np.multiply(yr,z)
+            # misclassified
+            conditions[conditions <= 1] = 1
+            conditions[conditions > 1] = 0
+            
+            v = np.dot(Xr, np.multiply(-yr.T,conditions.T))
+            dW = np.add(dW, v)
+            db = np.add(db, np.multiply(-yr.T,conditions.T))
+            
+        dW /= self.batch_size
+        dW = np.add(dW, np.dot((1 / self.C), W)) # margin
+        db /= self.batch_size
+        return dW, db
 
-            if np.dot(yr.T, z) <= 1:
-                if mode == 'W':
-                    v = np.dot(Xr, -yr.T)
-                    dW = np.add(dW, v)
-                if mode == 'b':
-                    db = np.add(db, -yr.T)
-            dW = np.add(dW, np.dot((1 / self.C), W))
-
-        if mode == 'W':
-            dW /= self.batch_size
-            return dW
-        if mode == 'b':
-            db /= self.batch_size
-            return db
-
+   
     def fit(self, X, y):
         """
         This should fit classifier.
@@ -76,71 +79,90 @@ class SGDSVM(BaseEstimator, ClassifierMixin):
         assert (type(self.C) == float), "C parameter must be float"
         assert (type(self.eta) == float), "eta parameter must be float"
         assert (type(self.max_iter) == int and (self.max_iter >= 1 or self.max_iter == -1)), "max_iter parameter must be positive integer. -1 for no limit"
-        assert (type(self.tol) == float), "tol parameter must be float"
-        assert (type(self.epoch_size) == int and self.epoch_size >= 1), "epoch_size parameter must be positive integer"
         assert (type(self.batch_size) == int and self.batch_size >= 1 and self.batch_size <= len(X)), "batch_size parameter must be positive integer"
 
+        self.history_score = list() # for saving score of each epoch
+
         n = np.array(X).shape[0] # number of data points
+        ss = np.arange(n)
         self.n_features = np.array(X).shape[1] # number of features
         self.n_classes = len(np.unique(y)) # number of classes
 
         # init parameter
-        # self.W = np.random.rand(self.n_features, self.n_classes) # (784, 10)
-        self.rgen = np.random.RandomState(self.random_state)
-        self.W = self.rgen.normal(loc=0.0, scale=0.01, size=(self.n_features, self.n_classes))
-        self.b = np.ones((1, self.n_classes)) # (1, 10)
+        self.rgen = np.random.RandomState(self.random_state) 
+        W = self.rgen.normal(loc=0.0, scale=0.01, size=(self.n_features, self.n_classes)) # (784, 10)
+        b = np.ones((1, self.n_classes)) # (1, 10)
+        W_ = W[:,:]
+        b_ = b[:,:]
+
+        # the best W and b that have the best accuracy
+        self.best_W = W_[:]
+        self.best_b = b_[:]
 
         if self.max_iter == -1:
             mi = INF
         else:
             mi = self.max_iter
-
+        
         # SGD Algorithm with Weight Averaging
-        for epoch in range(self.epoch_size):
-            # TODO - iter for와 batch for 순서 어떻게? 바꿔야 하지 않을까
-            for it in range(1, mi+1):
-                n_batches = int(np.ceil(len(y) / self.batch_size))
+        for it in range(1, mi+1):
+            n_batches = int(np.ceil(len(y) / self.batch_size)) # number of batches
 
-                # random sampling without replacement
-                s = np.arange(n_batches) # {0, 1, ... , n_batches-1}
-                self.rgen.shuffle(s)
+            # random sampling without replacement
+            s = np.arange(n_batches)# {0, 1, ... , n_batches-1}
+            self.rgen.shuffle(ss)
 
-                update_W = self.W
-                update_b = self.b
+            for i in range(n_batches):
+                # mini-batch
+                batch_idx = ss[self.batch_size * i: self.batch_size * (i + 1)]
+                # gradient
+                dw , db = self._SGD(X, y, W, b, batch_idx)
 
-                for k in s:
-                    # mini batch
-                    ks = self.batch_size * k
-                    ke = self.batch_size * (k + 1)
+                # update (weight averaging)
+                W = np.subtract(W, np.multiply(self.eta, dw)) # (784, 10)
+                b = np.subtract(b, np.multiply(self.eta, db)) # (1, 10)
+                W_ = np.add(np.multiply((it/(it+1)), W_), np.multiply((it/(it+1)), W))
+                b_ = np.add(np.multiply((it/(it+1)), b_), np.multiply((it/(it+1)), b))
 
-                    if ke > n:
-                        # the batch size is not a multiple of n
-                        BX = np.vstack((X[ks:n], X[0:ke-n]))
-                        By = np.vstack((self.one_hot(y)[ks:n], self.one_hot(y)[0:ke-n]))
-                    else:
-                        BX =  X[ks:ke]
-                        By =  self.one_hot(y)[ks:ke]
-                    
-                    BX =  np.reshape(BX, (self.batch_size, self.n_features))
-                    By =  np.reshape(By, (self.batch_size, self.n_classes))
 
-                    # update - SAG(stochastic average gradient)
-                    update_W = np.subtract(update_W, np.multiply(self.eta, self._SGD(BX, By, k, update_W, update_b, 'W'))) # (784, 10)
-                    update_b = np.subtract(update_b, np.multiply(self.eta, self._SGD(BX, By, k, update_W, update_b, 'b'))) # (1, 10)
-                    self.W = np.add(np.multiply((it/(it+1)), self.W), np.multiply((it/(it+1)), update_W))
-                    self.b = np.add(np.multiply((it/(it+1)), self.b), np.multiply((it/(it+1)), update_b))
+            # keep the best weight
+            if self._check_score(X, y, self.best_W, self.best_b) < self._check_score(X, y, W_, b_):
+                self.best_W = W_[:]
+                self.best_b = b_[:]
 
-                    # compare with tol in order to stop training
-                    if np.all(np.abs(np.subtract(self.W, update_W)) <= self.tol):
-                        break
+            if it % 10 == 0:
+                print(f"Iteration {it} / {self.max_iter} \t", end='')
+                print(f"train_accuracy {accuracy_score(self.predict(X), y)}")
+
+            # save acc socre of each epoch
+            self.history_score.append(self._score(X, y))
+
+    def get_score_history(self):
+        return self.history_score
+
+    def _check_score(self, X, y, W, b):
+        """get accuracy score with W"""
+        try:
+            z = np.add(np.dot(X, W), b)
+            y_pred = np.argmax(z, axis=1)
+            acc = accuracy_score(y, y_pred)
+        except AttributeError:
+            raise RuntimeError()
+            
+        return acc
+
+    def _score(self, X, y):
+        """get accuracy score"""
+        y_pred = self.predict(X)
+        acc = accuracy_score(y, y_pred)
+        return acc
 
     def predict(self, X):
         """
         Predict y hat
         """
         try:
-            X = np.reshape(X, (len(X), self.n_features))
-            z = np.dot(X, self.W) + self.b
+            z = np.dot(X, self.best_W) + self.best_b
             y_pred = np.argmax(z, axis=1)
 
         except AttributeError:

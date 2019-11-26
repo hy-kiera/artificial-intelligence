@@ -1,48 +1,13 @@
 import os, sys
 import struct
 import numpy as np
-import matplotlib.pyplot as pyplot
+import matplotlib.pyplot as plt
 from SVM import SGDSVM
 from utils import *
 from sklearn.metrics import accuracy_score
 from sklearn.svm import SVC
 from sklearn.model_selection import GridSearchCV
-
-def load_data(dataset="training", path="."):
-    """
-    Python function for importing the MNIST data set.  It returns an iterator
-    of 2-tuples with the first element being the label and the second element
-    being a numpy.uint8 2D array of pixel data for the given image.
-    """
-    # if dataset == "training":
-    #     fname_img = os.path.join(path, 'train-images-idx3-ubyte')
-    #     fname_lbl = os.path.join(path, 'train-labels-idx1-ubyte')
-
-    # elif dataset == "testing":
-    #     fname_img = os.path.join(path, 'test-images-idx3-ubyte')
-    #     fname_lbl = os.path.join(path, 'test-labels-idx1-ubyte')
-
-    # elif dataset == "new1k":
-    #     fname_img = os.path.join(path, 'new1k-images-idx3-ubyte')
-    #     fname_lbl = os.path.join(path, 'new1k-labels-idx1-ubyte')
-        
-    # else:
-    #     raise Exception("dataset must be 'testing' or 'training'")
-
-    # # Load everything in some numpy arrays
-    # with open(fname_lbl, 'rb') as flbl:
-    #     magic, num = struct.unpack(">II", flbl.read(8))
-    #     lbl = np.fromfile(flbl, dtype=np.int8)
-
-    # with open(fname_img, 'rb') as fimg:
-    #     magic, num, rows, cols = struct.unpack(">IIII", fimg.read(16))
-    #     img = np.fromfile(fimg, dtype=np.uint8).reshape(len(lbl), rows, cols)
-
-    # get_img = lambda idx: (lbl[idx], img[idx])
-
-    # # Create an iterator which returns each image in turn
-    # for i in range(len(lbl)):
-    #     yield get_img(i)
+import time
 
 def read_idx(filename):
     with open(filename, 'rb') as f:
@@ -51,11 +16,8 @@ def read_idx(filename):
         return np.fromstring(f.read(), dtype=np.uint8).reshape(shape)
 
 def MNIST_Classify_test():
-    # data = load_data("training", "./dataset/")
-    # train_dataset = np.array(data)
-
     #load data
-    raw_D1 = read_idx("./dataset/train-images.idx3-ubyte")
+    raw_D1 = read_idx("./dataset/train-images.idx3-ubyte") # (60000, 28, 28)
     D1_data = np.reshape(raw_D1, (60000, 784))
     D1_label = read_idx("./dataset/train-labels.idx1-ubyte")
 
@@ -67,38 +29,55 @@ def MNIST_Classify_test():
     D2_data = np.reshape(raw_D2, (10000, 784))
     D2_label = read_idx("./dataset/test-labels.idx1-ubyte")
 
+    # deskew
+    deskewed_D1, deskewed_D2, deskewed_new = dup_data(raw_D1, raw_D2, raw_new)
+
     # train data, valid data
-    X_train = np.vstack((D1_data, new_data))
-    y_train = np.concatenate((np.array(D1_label), np.array(new_label)))
-    X_valid = np.array(D2_data)
-    y_valid = np.array(D2_label)
-
-    X_train, X_valid = preprocess(X_train, X_valid, y_train, y_valid)
-    print("X_train.shape : {0}, X_valid.shape : {1}".format(X_train.shape, X_valid.shape))
-    print("y_train.shape : {0}, y_valid.shape : {1}".format(y_train.shape, y_valid.shape))
-    print()
+    # X_train = np.vstack((D1_data, D2_data))
+    # deskewed_X_train = np.vstack((deskewed_D1, deskewed_D2))
+    # # print(f"X_train.shape : {X_train.shape}, deskewed_X_train.shape : {deskewed_X_train.shape}")
+    # X_train = np.vstack((X_train, deskewed_X_train.reshape((-1, 784))))
     
-    svm = SGDSVM(C=1.0, eta=0.001, max_iter=5, tol=1e-3, epoch_size=1, batch_size=256, random_state=1234)
-    svm.fit(X_train, y_train)
-    y_pred = svm.predict(X_valid)
+    # y_train = np.concatenate((np.array(D1_label), np.array(D2_label)))
+    # y_train = np.concatenate((y_train, y_train))
+    
+    # X_valid = np.array(new_data)
+    # y_valid = np.array(new_label)
 
-    # TODO : GridSearchCV
-    # C=[0.01,0.1,10,100]
-    # tol=[0.01,0.1,10,100]
-    # eta=[0.0002,0.002,0.02]
-    # max_iter=[100,1000]
-    # param_grid = [
-    #     {'C' : C,
-    #     'tol' : tol,
-    #     'eta' : eta,
-    #     'max_iter' : max_iter
-    #     }
-    # ]
-    # svm = SGDSVM(epoch_size=10, batch_size=200, random_state=1234)
-    # param_grid = [{'C':[1.0], 'tol':[1e-3], 'eta':[0.001], 'max_iter':[1]}]
-    # gs = GridSearchCV(svm, param_grid, cv = 2)
-    # gs = gs.fit(X_train, y_train)
-    # print(gs.best_score_)
+    raw_train = read_idx("./dataset/newtrain-images.idx3-ubyte")
+    train_data = np.reshape(raw_train, (80000, 784))
+    train_label = read_idx("./dataset/newtrain-labels.idx1-ubyte")
+
+    X_train = train_data[:,:]
+    y_train = train_label[:]
+
+    X_valid = deskewed_D1[:,:].reshape((60000, 784))
+    y_valid = D1_label[:]
+
+    print("X_train.shape : {0}, X_valid.shape : {1}".format(X_train.shape, X_valid.shape)) # (70000, 784), (10000, 784)
+    print("y_train.shape : {0}, y_valid.shape : {1}".format(y_train.shape, y_valid.shape)) # (70000,), (10000,)
+    print()
+
+    svm = SGDSVM(C=1000.0, eta=0.01, max_iter=100, batch_size=64, random_state=1126)
+    start = time.time()
+    svm.fit(X_train, y_train)
+    end = time.time()
+
+    print("training time : ", end-start, "sec\n")
+    
+    f = open("./results/acc_scores.txt", "w")
+    acc_scores = svm.get_score_history()
+    
+    # save acc scores
+    content = "================================================================\n"
+    for i, score in enumerate(acc_scores):
+        content += (str(score) + ", ")
+        if i % 25 == 0:
+            content += "\n"
+    f.write(content)
+    f.close()
+
+    y_pred = svm.predict(X_valid)
 
     DrawCMat(y_valid, y_pred)
 
@@ -106,9 +85,53 @@ def MNIST_Classify_test():
     accuracy = accuracy_score(y_valid, y_pred)
     print("Accuracy : ", accuracy)
 
-# def main(training_image=None, training_label=None, test_image):
-    # TODO - only predict test image (need to save weight and bias value and load them)
+    x = np.arange(0, len(acc_scores)+1, 25)
+    plt.title("acc_score")
+    plt.plot(acc_scores)
+    plt.xticks(x)
+    plt.xlabel("epoch")
+    plt.ylabel("acc")
+    plt.grid(False)
+    plt.show()
+
+def main(training_image_path, training_label_path, test_image_path):
+    # train
+    raw_train = read_idx(training_image_path)
+    train_data = np.reshape(raw_train, (-1, 784))
+    train_label = read_idx(training_label_path)
+
+    # test
+    raw_test = read_idx(test_image_path)
+    test_data = np.reshape(raw_test, (-1, 784))
+    
+    # duplicate data
+    dup_train_data, dup_train_label = duplicate_data(raw_train, train_label)
+
+    X_train = np.vstack((train_data, dup_train_data))
+    y_train = np.concatenate((np.array(train_label), np.array(dup_train_label)))
+    X_test = test_data[:,:]
+
+    # Scaling
+    X_train, X_test = preprocess(X_train, X_test)
+
+    # SVM
+    svm = SGDSVM(C=10.0, eta=0.001, max_iter=200, batch_size=200, random_state=1126)
+    # training
+    svm.fit(X_train, y_train)
+
+    # predict
+    y_pred = svm.predict(X_test)
+
+    # save predicted value of test data
+    f = open("./prediction.txt", "w")
+    out = ""
+    for i, val in enumerate(y_pred):
+        out += str(val) + "|\n\n"
+    # print(out)
+    f.write(out)
+    f.close()
+    
 
 if __name__ == '__main__':
-#     main(training_image=sys.argv[1], training_label=sys.argv[2], test_image=sts.argv[3])
+    main(training_image_path=sys.argv[1], training_label_path=sys.argv[2], test_image_path=sys.argv[3])
     MNIST_Classify_test()
