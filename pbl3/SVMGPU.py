@@ -230,13 +230,17 @@ def main(training_image_path, training_label_path, test_image_path):
     #load data
     X_train = read_idx(training_image_path)
     y_train = read_idx(training_label_path)
-    X_test = read_idx(test_image_path).reshape(-1, 784)
+    X_test = read_idx(test_image_path)
 
     # deskew -> delite
-    deskewed_D1 = dup_data(X_train)
+    deskewed_train = dup_data(X_train)
     kernel = np.ones((2, 2), np.uint8)
-    dilated = np.array([cv2.dilate(img, kernel, iterations = 1) for img in deskewed_D1])
-    X_train = np.reshape(dilated, (-1, 784))
+    dilated_train = np.array([cv2.dilate(img, kernel, iterations = 1) for img in deskewed_train])
+    X_train = np.reshape(dilated_train, (-1, 784))
+
+    deskewed_test = dup_data(X_test)
+    dilated_test = np.array([cv2.dilate(img, kernel, iterations = 1) for img in deskewed_test])
+    X_test = np.reshape(dilated_test, (-1, 784))
 
     X_train, X_test = preprocess(X_train, X_test)
 
