@@ -268,7 +268,7 @@ def main(training_image_path, training_label_path, test_image_path):
     y_pred = svm.predict(X_test)
 
     # save predicted value of test data
-    f = open("./gdrive/My Drive/prediction.txt", "w")
+    f = open("./prediction.txt", "w")
     out = ""
     for i, val in enumerate(y_pred):
         out += str(val) + "|\n\n"
